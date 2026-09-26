@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Foundry project (has its own toolchain) and generated ABIs.
+    "contracts/**",
+    ".scratch/**",
+    "lib/ens/abis/**",
   ]),
 ]);
 
