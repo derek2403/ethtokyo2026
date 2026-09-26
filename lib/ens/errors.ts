@@ -30,6 +30,9 @@ const HINTS: Record<string, string> = {
   CommitmentTooNew: "Wait a little longer after committing.",
   CommitmentTooOld: "The commitment expired; start over.",
   NameNotAvailable: "That name is already registered.",
+  // Names are ERC-1155 tokens, so the new owner must accept them (onERC1155Received).
+  ERC1155InvalidReceiver: "The new owner is a contract or smart wallet that can't hold names; use a normal wallet address.",
+  CannotSetPastExpiry: "The expiry is already in the past; pick a later time.",
 };
 
 type ErrorLike = { name?: string; shortMessage?: string; message?: string; cause?: unknown; data?: unknown; raw?: unknown; reason?: string };

@@ -14,6 +14,9 @@ import { type Address, type Hex, isHex, recoverMessageAddress } from "viem";
 
 export const TOKEN_PREFIX = "kr1";
 
+/** Longest token lifetime a relay accepts unless configured otherwise (RELAY_MAX_TOKEN_TTL). */
+export const DEFAULT_MAX_TOKEN_TTL_SEC = 24 * 3600;
+
 export type TokenPayload = {
   v: 1;
   /** Normalized ENS name the agent acts as. */
@@ -22,6 +25,8 @@ export type TokenPayload = {
   iat: number;
   /** Expires at, unix seconds. Set it no later than the name's expiry. */
   exp: number;
+  /** Optional audience: the origin of the relay the token is for (e.g. "https://relay.acme.com"). */
+  aud?: string;
 };
 
 type Signer = { signMessage: (args: { message: string }) => Promise<Hex> };
@@ -61,20 +66,44 @@ export function parseToken(token: string): { payload: TokenPayload; body: string
   } catch {
     throw new TokenError("bad token payload");
   }
-  if (payload?.v !== 1 || typeof payload.name !== "string" || typeof payload.exp !== "number" || typeof payload.iat !== "number") {
+  if (
+    payload?.v !== 1 ||
+    typeof payload.name !== "string" ||
+    typeof payload.exp !== "number" ||
+    typeof payload.iat !== "number" ||
+    (payload.aud !== undefined && typeof payload.aud !== "string")
+  ) {
     throw new TokenError("bad token payload");
   }
   return { payload, body, signature };
 }
 
+export type VerifyOptions = {
+  /** Reject tokens whose lifetime (exp - iat) is longer than this. */
+  maxTtlSec?: number;
+  /** Accepted audiences. A token that names an audience must match one; a token without one is accepted. */
+  audiences?: string[];
+};
+
 /**
- * Verifies the signature and expiry and returns who signed it. Does NOT check
- * ENS: the caller must still confirm `signer` owns `payload.name` right now.
+ * Verifies the signature, expiry and (with options) lifetime and audience,
+ * and returns who signed it. Does NOT check ENS: the caller must still
+ * confirm `signer` owns `payload.name` right now.
  */
-export async function verifyToken(token: string, nowSec = Math.floor(Date.now() / 1000)): Promise<{ payload: TokenPayload; signer: Address }> {
+export async function verifyToken(
+  token: string,
+  nowSec = Math.floor(Date.now() / 1000),
+  opts: VerifyOptions = {},
+): Promise<{ payload: TokenPayload; signer: Address }> {
   const { payload, body, signature } = parseToken(token);
   if (payload.exp <= nowSec) throw new TokenError("token expired");
   if (payload.iat > nowSec + 300) throw new TokenError("token issued in the future");
+  if (opts.maxTtlSec !== undefined && payload.exp - payload.iat > opts.maxTtlSec) {
+    throw new TokenError(`token lifetime is longer than this relay allows (${Math.round(opts.maxTtlSec / 3600)} h); sign a shorter one`);
+  }
+  if (opts.audiences && payload.aud !== undefined && !opts.audiences.includes(payload.aud.replace(/\/+$/, ""))) {
+    throw new TokenError(`token is for ${payload.aud}, not this relay`);
+  }
   let signer: Address;
   try {
     signer = await recoverMessageAddress({ message: tokenMessage(body), signature });

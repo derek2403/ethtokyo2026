@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -42,3 +43,15 @@ next-env.d.ts
 
 # agent scratch scripts
 /.scratch/
+
+# relay meter and decision log
+/.data/
+
+# agent keys made by `npm run agent -- new`
+/.keyless/
+
+# demo-workspace: what Codex makes during a demo (the CLI's own files stay tracked)
+/demo-workspace/*
+!/demo-workspace/relay
+!/demo-workspace/AGENTS.md
+!/demo-workspace/.agents/

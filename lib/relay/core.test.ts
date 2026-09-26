@@ -60,7 +60,30 @@ test("evaluate: remaining is the tightest cap", () => {
     { name: "derek.eng.acme.eth", bundle: bundle("claude", { claude: "100" }), spent: { claude: 40 } },
     { name: "laptop.derek.eng.acme.eth", bundle: bundle("claude"), spent: {} },
   ];
-  assert.deepEqual(evaluate(levels, "claude"), { allowed: true, reason: null, remaining: 60 });
+  assert.deepEqual(evaluate(levels, "claude"), { allowed: true, reason: null, remaining: 60, remainingCount: null });
+});
+
+test("evaluate: count limits (e.g. 1 image) are enforced at every level", () => {
+  const withMax = (keys: string, max: Record<string, string>) =>
+    parseBundle({
+      [RECORD_KEYS.keys]: keys,
+      ...Object.fromEntries(Object.entries(max).map(([p, v]) => [RECORD_KEYS.max(p), v])),
+    });
+  const levels = [
+    { name: "codex.derek.dev.eng.acme.eth", bundle: withMax("openai-images", { "openai-images": "2" }), spent: {}, used: { "openai-images": 1 } },
+    { name: "image.codex.derek.dev.eng.acme.eth", bundle: withMax("openai-images", { "openai-images": "1" }), spent: {}, used: {} },
+  ];
+  assert.deepEqual(evaluate(levels, "openai-images"), { allowed: true, reason: null, remaining: null, remainingCount: 1 });
+  levels[1].used = { "openai-images": 1 };
+  const d = evaluate(levels, "openai-images");
+  assert.equal(d.allowed, false);
+  assert.match(d.reason!, /image\.codex.* has used its openai-images limit \(1 image\)/);
+});
+
+test("parseBundle: count limits are whole numbers and bad values deny", () => {
+  const b = parseBundle({ [RECORD_KEYS.keys]: "stripe", [RECORD_KEYS.max("stripe")]: "2.7", [RECORD_KEYS.max("github")]: "nope" })!;
+  assert.equal(b.maxes!.stripe, 2);
+  assert.equal(b.maxes!.github, 0);
 });
 
 test("evaluate: missing bundle anywhere denies", () => {
